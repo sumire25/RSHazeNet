@@ -1,4 +1,5 @@
 import os
+import re
 import random
 import torch
 import torchvision.transforms.functional as ttf
@@ -6,30 +7,44 @@ from torch.utils.data import Dataset
 from PIL import Image
 
 
+def _extract_id(filename):
+    match = re.match(r'(\d+)', filename)
+    return match.group(1) if match else filename
+
+
+def _build_id_map(directory):
+    return {_extract_id(f): f for f in os.listdir(directory) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.bmp'))}
+
+
 class MyTrainDataSet(Dataset):
     def __init__(self, inputPathTrain, targetPathTrain, patch_size=512):
         super(MyTrainDataSet, self).__init__()
 
         self.inputPath = inputPathTrain
-        self.inputImages = os.listdir(inputPathTrain)
-
         self.targetPath = targetPathTrain
-        self.targetImages = os.listdir(targetPathTrain)
+
+        input_map = _build_id_map(inputPathTrain)
+        target_map = _build_id_map(targetPathTrain)
+
+        self.common_ids = sorted(set(input_map.keys()) & set(target_map.keys()), key=lambda x: int(x) if x.isdigit() else x)
+        self.input_map = input_map
+        self.target_map = target_map
 
         self.ps = patch_size
 
     def __len__(self):
-        return len(self.targetImages)
+        return len(self.common_ids)
 
     def __getitem__(self, index):
 
         ps = self.ps
-        index = index % len(self.targetImages)
+        index = index % len(self.common_ids)
 
-        inputImagePath = os.path.join(self.inputPath, self.inputImages[index])
+        img_id = self.common_ids[index]
+        inputImagePath = os.path.join(self.inputPath, self.input_map[img_id])
+        targetImagePath = os.path.join(self.targetPath, self.target_map[img_id])
+
         inputImage = Image.open(inputImagePath).convert('RGB')
-
-        targetImagePath = os.path.join(self.targetPath, self.inputImages[index])
         targetImage = Image.open(targetImagePath).convert('RGB')
 
         inputImage = ttf.to_tensor(inputImage)
@@ -40,7 +55,7 @@ class MyTrainDataSet(Dataset):
         rr = random.randint(0, hh-ps)
         cc = random.randint(0, ww-ps)
         aug = random.randint(0, 8)
-        #
+
         input_ = inputImage[:, rr:rr+ps, cc:cc+ps]
         target = targetImage[:, rr:rr+ps, cc:cc+ps]
 
@@ -67,25 +82,30 @@ class MyValueDataSet(Dataset):
         super(MyValueDataSet, self).__init__()
 
         self.inputPath = inputPathTrain
-        self.inputImages = os.listdir(inputPathTrain)
-
         self.targetPath = targetPathTrain
-        self.targetImages = os.listdir(targetPathTrain)
+
+        input_map = _build_id_map(inputPathTrain)
+        target_map = _build_id_map(targetPathTrain)
+
+        self.common_ids = sorted(set(input_map.keys()) & set(target_map.keys()), key=lambda x: int(x) if x.isdigit() else x)
+        self.input_map = input_map
+        self.target_map = target_map
 
         self.ps = patch_size
 
     def __len__(self):
-        return len(self.targetImages)
+        return len(self.common_ids)
 
     def __getitem__(self, index):
 
         ps = self.ps
-        index = index % len(self.targetImages)
+        index = index % len(self.common_ids)
 
-        inputImagePath = os.path.join(self.inputPath, self.inputImages[index])
+        img_id = self.common_ids[index]
+        inputImagePath = os.path.join(self.inputPath, self.input_map[img_id])
+        targetImagePath = os.path.join(self.targetPath, self.target_map[img_id])
+
         inputImage = Image.open(inputImagePath).convert('RGB')
-
-        targetImagePath = os.path.join(self.targetPath, self.inputImages[index])
         targetImage = Image.open(targetImagePath).convert('RGB')
 
         inputImage = ttf.center_crop(inputImage, [ps, ps])
@@ -102,26 +122,29 @@ class MyTestDataSet(Dataset):
         super(MyTestDataSet, self).__init__()
 
         self.inputPath = inputPathTest
-        self.inputImages = os.listdir(inputPathTest)
-        self.inputImages.sort(key=lambda x: int(x.split('.')[0]))
-
         self.targetPath = targetPathTest
-        self.targetImages = os.listdir(targetPathTest)
-        self.targetImages.sort(key=lambda x: int(x.split('.')[0]))
+
+        input_map = _build_id_map(inputPathTest)
+        target_map = _build_id_map(targetPathTest)
+
+        self.common_ids = sorted(set(input_map.keys()) & set(target_map.keys()), key=lambda x: int(x) if x.isdigit() else x)
+        self.input_map = input_map
+        self.target_map = target_map
 
     def __len__(self):
-        return len(self.inputImages)
+        return len(self.common_ids)
 
     def __getitem__(self, index):
-        index = index % len(self.inputImages)
+        index = index % len(self.common_ids)
 
-        inputImagePath = os.path.join(self.inputPath, self.inputImages[index])
+        img_id = self.common_ids[index]
+        inputImagePath = os.path.join(self.inputPath, self.input_map[img_id])
+        targetImagePath = os.path.join(self.targetPath, self.target_map[img_id])
+
         inputImage = Image.open(inputImagePath).convert('RGB')
-
-        targetImagePath = os.path.join(self.targetPath, self.inputImages[index])
         targetImage = Image.open(targetImagePath).convert('RGB')
 
         input_ = ttf.to_tensor(inputImage)
         target = ttf.to_tensor(targetImage)
 
-        return input_, target, self.inputImages[index]
+        return input_, target, self.input_map[img_id]
