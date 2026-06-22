@@ -118,31 +118,36 @@ if __name__ == '__main__':
             myNet.eval()
             psnr_list, ssim_list, sam_list, ergas_list = [], [], [], []
             for index, (x, y) in enumerate(valueLoader, 0):
-                input_, target_value = (x.cuda(), y.cuda()) if opt.CUDA_USE else (x, y)
-                with torch.no_grad():
-                    _, _, h, w = input_.shape
-                    input_pad, mask = expand2square(input_, factor=128)
-                    output_value = myNet(input_pad).clamp_(-1, 1)
-                    output_value = output_value * 0.5 + 0.5
-                    target_value = target_value * 0.5 + 0.5
-                    output_value = torch.masked_select(output_value, mask.bool()).reshape(1, 3, h, w)
+                input_batch, target_batch = (x.cuda(), y.cuda()) if opt.CUDA_USE else (x, y)
+                
+                for i in range(input_batch.size(0)):
+                    input_ = input_batch[i:i+1]
+                    target_value = target_batch[i:i+1]
+                    
+                    with torch.no_grad():
+                        _, _, h, w = input_.shape
+                        input_pad, mask = expand2square(input_, factor=128)
+                        output_value = myNet(input_pad).clamp_(-1, 1)
+                        output_value = output_value * 0.5 + 0.5
+                        target_value = target_value * 0.5 + 0.5
+                        output_value = torch.masked_select(output_value, mask.bool()).reshape(1, 3, h, w)
 
-                    mse_val = F.mse_loss(output_value, target_value)
-                    psnr_val = 10 * torch.log10(1 / mse_val).item()
-                    psnr_list.append(psnr_val)
+                        mse_val = F.mse_loss(output_value, target_value)
+                        psnr_val = 10 * torch.log10(1 / mse_val).item()
+                        psnr_list.append(psnr_val)
 
-                    _, _, H, W = output_value.size()
-                    down_ratio = max(1, round(min(H, W) / 256))
-                    ssim_val = ssim(F.adaptive_avg_pool2d(output_value, (int(H / down_ratio), int(W / down_ratio))),
-                                    F.adaptive_avg_pool2d(target_value, (int(H / down_ratio), int(W / down_ratio))),
-                                    data_range=1, size_average=False).item()
-                    ssim_list.append(ssim_val)
+                        _, _, H, W = output_value.size()
+                        down_ratio = max(1, round(min(H, W) / 256))
+                        ssim_val = ssim(F.adaptive_avg_pool2d(output_value, (int(H / down_ratio), int(W / down_ratio))),
+                                        F.adaptive_avg_pool2d(target_value, (int(H / down_ratio), int(W / down_ratio))),
+                                        data_range=1, size_average=False).item()
+                        ssim_list.append(ssim_val)
 
-                    sam_val = calculate_sam(output_value, target_value)
-                    sam_list.append(sam_val)
+                        sam_val = calculate_sam(output_value, target_value)
+                        sam_list.append(sam_val)
 
-                    ergas_val = calculate_ergas(output_value, target_value)
-                    ergas_list.append(ergas_val)
+                        ergas_val = calculate_ergas(output_value, target_value)
+                        ergas_list.append(ergas_val)
 
             avg_psnr = np.mean(psnr_list)
             avg_ssim = np.mean(ssim_list)
