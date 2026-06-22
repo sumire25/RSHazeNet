@@ -27,7 +27,7 @@ def calculate_sam(img1, img2):
     cos = dot / (norm1 * norm2 + eps)
     cos = cos.clamp(-1, 1)
     sam = torch.acos(cos).mean()
-    return torch.degrees(sam).item()
+    return torch.rad2deg(sam).item()
 
 
 def calculate_ergas(img1, img2, ratio=1):
