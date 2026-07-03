@@ -159,12 +159,27 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
         except ImportError:
             raise SystemExit("Install google-generativeai for --api gemini (pip install google-generativeai)")
 
-    # Local VLM
+    # Local VLM. Newer transformers renamed AutoModelForVision2Seq, so try
+    # several import paths; the model-specific class is the most reliable.
     import torch
-    from transformers import AutoModelForVision2Seq, AutoProcessor
+    import transformers
+    from transformers import AutoProcessor
+
+    ModelClass = None
+    for name in ("AutoModelForImageTextToText", "AutoModelForVision2Seq",
+                 "Qwen2VLForConditionalGeneration"):
+        cls = getattr(transformers, name, None)
+        if cls is not None:
+            ModelClass = cls
+            break
+    if ModelClass is None:
+        raise SystemExit(
+            "Could not find a vision-language model class in transformers. "
+            "Upgrade with: pip install -U transformers"
+        )
 
     processor = AutoProcessor.from_pretrained(vlm_model_id, trust_remote_code=True)
-    model = AutoModelForVision2Seq.from_pretrained(
+    model = ModelClass.from_pretrained(
         vlm_model_id, torch_dtype=torch.float16, trust_remote_code=True
     ).to(device).eval()
 
