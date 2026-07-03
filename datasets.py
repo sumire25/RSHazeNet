@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import random
 import torch
 import torchvision.transforms.functional as ttf
@@ -16,8 +17,29 @@ def _build_id_map(directory):
     return {_extract_id(f): f for f in os.listdir(directory) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.bmp'))}
 
 
+def load_caption_map(caption_path):
+    """Load a captions.json produced by caption.py into a dict keyed by
+    the *base image id* (the leading numeric prefix, or the filename if
+    no prefix). Returns {} if the file does not exist (no conditioning)."""
+    if not caption_path or not os.path.exists(caption_path):
+        return {}
+    with open(caption_path, 'r') as f:
+        raw = json.load(f)
+    out = {}
+    for fname, entry in raw.items():
+        key = _extract_id(os.path.basename(fname))
+        if isinstance(entry, dict):
+            out[key] = {
+                'caption': entry.get('caption', ''),
+                'level': entry.get('level', 0),
+            }
+        else:
+            out[key] = {'caption': str(entry), 'level': 0}
+    return out
+
+
 class MyTrainDataSet(Dataset):
-    def __init__(self, inputPathTrain, targetPathTrain, patch_size=512):
+    def __init__(self, inputPathTrain, targetPathTrain, patch_size=512, caption_map=None):
         super(MyTrainDataSet, self).__init__()
 
         self.inputPath = inputPathTrain
@@ -31,6 +53,7 @@ class MyTrainDataSet(Dataset):
         self.target_map = target_map
 
         self.ps = patch_size
+        self.caption_map = caption_map or {}
 
     def __len__(self):
         return len(self.common_ids)
@@ -74,11 +97,12 @@ class MyTrainDataSet(Dataset):
         elif aug == 7:
             input_, target = torch.rot90(input_.flip(2), dims=(1, 2)), torch.rot90(target.flip(2), dims=(1, 2))
 
-        return input_, target
+        entry = self.caption_map.get(img_id, {'caption': '', 'level': 0})
+        return input_, target, entry['caption'], entry['level']
 
 
 class MyValueDataSet(Dataset):
-    def __init__(self, inputPathTrain, targetPathTrain, patch_size=64):
+    def __init__(self, inputPathTrain, targetPathTrain, patch_size=64, caption_map=None):
         super(MyValueDataSet, self).__init__()
 
         self.inputPath = inputPathTrain
@@ -92,6 +116,7 @@ class MyValueDataSet(Dataset):
         self.target_map = target_map
 
         self.ps = patch_size
+        self.caption_map = caption_map or {}
 
     def __len__(self):
         return len(self.common_ids)
@@ -114,11 +139,12 @@ class MyValueDataSet(Dataset):
         input_ = ttf.to_tensor(inputImage)
         target = ttf.to_tensor(targetImage)
 
-        return input_, target
+        entry = self.caption_map.get(img_id, {'caption': '', 'level': 0})
+        return input_, target, entry['caption'], entry['level']
 
 
 class MyTestDataSet(Dataset):
-    def __init__(self, inputPathTest, targetPathTest):
+    def __init__(self, inputPathTest, targetPathTest, caption_map=None):
         super(MyTestDataSet, self).__init__()
 
         self.inputPath = inputPathTest
@@ -130,6 +156,7 @@ class MyTestDataSet(Dataset):
         self.common_ids = sorted(set(input_map.keys()) & set(target_map.keys()), key=lambda x: int(x) if x.isdigit() else x)
         self.input_map = input_map
         self.target_map = target_map
+        self.caption_map = caption_map or {}
 
     def __len__(self):
         return len(self.common_ids)
@@ -147,4 +174,5 @@ class MyTestDataSet(Dataset):
         input_ = ttf.to_tensor(inputImage)
         target = ttf.to_tensor(targetImage)
 
-        return input_, target, self.input_map[img_id]
+        entry = self.caption_map.get(img_id, {'caption': '', 'level': 0})
+        return input_, target, self.input_map[img_id], entry['caption'], entry['level']

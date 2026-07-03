@@ -204,9 +204,51 @@ class BasicBlock(nn.Module):
         return x
 
 
+class CrossAttentionCond(nn.Module):
+    """Bottleneck cross-attention conditioning on haze-level text tokens.
+
+    Query  : flattened latent feature map (B, H*W, C_bottleneck)
+    Key/Val: CLIP text tokens (B, N_text, text_dim) projected to C_bottleneck
+    Output : residual-added latent (B, C, H, W).
+
+    When ``text_dim`` is None or text tokens are not supplied at forward
+    time, the block becomes a no-op identity, so the original RSHazeNet
+    behaviour is preserved and old checkpoints load cleanly.
+    """
+    def __init__(self, dim, text_dim=512, num_heads=8, bias=False):
+        super(CrossAttentionCond, self).__init__()
+        self.dim = dim
+        self.norm_q = LayerNorm2d(dim)
+        self.text_proj = nn.Linear(text_dim, dim, bias=bias)
+        self.attn = nn.MultiheadAttention(dim, num_heads=num_heads, batch_first=True, bias=bias)
+        self.gamma = nn.Parameter(torch.zeros(1))
+        self.ffn = nn.Sequential(
+            nn.Linear(dim, dim * 2),
+            nn.GELU(),
+            nn.Linear(dim * 2, dim),
+        )
+        self.ffn_norm = nn.LayerNorm(dim)
+
+    def forward(self, latent, text_tokens=None):
+        if text_tokens is None:
+            return latent
+        b, c, h, w = latent.shape
+        q = self.norm_q(latent).reshape(b, c, h * w).transpose(1, 2)        # (B, HW, C)
+        kv = self.text_proj(text_tokens)                                    # (B, N, C)
+        attn_out, _ = self.attn(q, kv, kv, need_weights=False)             # (B, HW, C)
+        attn_out = attn_out.transpose(1, 2).reshape(b, c, h, w)
+        latent = latent + self.gamma * attn_out
+        ffn_in = latent.reshape(b, c, h * w).transpose(1, 2)
+        latent = latent + self.ffn(self.ffn_norm(ffn_in)).transpose(1, 2).reshape(b, c, h, w)
+        return latent
+
+
 class RSHazeNet(nn.Module):
-    def __init__(self, in_chans=3, out_chans=4, dim=32, depths=(2, 3, 4)):
+    def __init__(self, in_chans=3, out_chans=4, dim=32, depths=(2, 3, 4), text_dim=512):
         super(RSHazeNet, self).__init__()
+
+        self.text_dim = text_dim
+        self.cond_block = CrossAttentionCond(int(dim * 2 ** 2), text_dim=text_dim)
 
         self.patch_embed_level_1 = OverlapPatchEmbed(in_c=in_chans, embed_dim=dim, bias=False)
         self.skip_connection_level_1_pre = nn.Sequential(*[BasicBlock(dim) for _ in range(depths[0] // 2)])
@@ -235,7 +277,7 @@ class RSHazeNet(nn.Module):
 
         self.output_level_1 = nn.Conv2d(dim, out_chans, kernel_size=to_2tuple(3), padding=1, padding_mode='reflect', bias=False)
 
-    def forward_features(self, x):
+    def forward_features(self, x, text_tokens=None):
         x = self.patch_embed_level_1(x)
         skip_level_1_pre = self.skip_connection_level_1_pre(x)
 
@@ -244,6 +286,9 @@ class RSHazeNet(nn.Module):
 
         x = self.down_level_3(x)
         latent_pre = self.skip_connection_level_3_pre(x)
+
+        if text_tokens is not None:
+            latent_pre = self.cond_block(latent_pre, text_tokens)
 
         skip_level_2_pre, latent_pre = self.cmfi_level_2_3(skip_level_2_pre, latent_pre)
 
@@ -264,11 +309,11 @@ class RSHazeNet(nn.Module):
         x = self.output_level_1(x)
         return x
 
-    def forward(self, x):
+    def forward(self, x, text_tokens=None):
         input_ = x
         _, _, h, w = input_.shape
 
-        x = self.forward_features(x)
+        x = self.forward_features(x, text_tokens)
         K, B = torch.split(x, [1, 3], dim=1)
 
         x = K * input_ - B + input_
@@ -285,4 +330,9 @@ if __name__ == '__main__':
 
     flops, params = profile(net, (x,))
     flops, params = clever_format([flops, params], "%.3f")
-    print(flops, params)
+    print('plain:', flops, params)
+
+    text_tokens = torch.randn((1, 12, 512)).cuda()
+    flops, params = profile(net, (x, text_tokens))
+    flops, params = clever_format([flops, params], "%.3f")
+    print('text-conditioned:', flops, params)

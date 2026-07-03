@@ -20,6 +20,34 @@ tqdm 4.64.0
 opencv-python 4.5.2.54
 ```
 
+### VLM-guided dehazing (caption conditioning)
+
+This fork adds an optional **VLM haziness-caption conditioning** path:
+a vision-language model captions each hazy image offline (describing the
+haze level), those captions are encoded by a frozen CLIP text encoder,
+and the tokens condition the network bottleneck via cross-attention.
+This lets the model adapt to the haze severity of each image.
+
+Conditioning is **off by default**, so the network behaves exactly like
+the original RSHazeNet. Pass `--caption` to enable it.
+
+**Extra dependencies** (install on Colab):
+```python
+pip install transformers accelerate
+```
+
+**Step 1 — caption the dataset (run once per split):**
+```python
+# Loads Qwen2-VL-2B-Instruct in fp16 (<15 GB VRAM), caches captions.json
+python caption.py --input_dir ./Haze1k-thick/train/hazy
+python caption.py --input_dir ./Haze1k-thick/val/hazy
+python caption.py --input_dir ./Haze1k-thick/test/hazy
+```
+Idempotent — interrupt and re-run; already-captioned images are skipped.
+`captions.json` is written next to the input dir and read automatically
+by train/test when `--caption` is set. A remote API can be used instead
+of a local VLM: `--api openai --api_key sk-...` (or `--api gemini`).
+
 ### Train
 
 If you intend to conduct training on our proposed RSHazeNet using your own datasets, it is imperative to initially ascertain the training and testing paths specified in `options.py`. Specifically, the paths should be provided in the manner illustrated below.
@@ -38,6 +66,21 @@ Subsequently, you may attempt the execution of the following command in order to
 ```python
 python train.py
 ```
+
+**VLM-conditioned training** (after captioning):
+```python
+python train.py --caption --haze_weight 0.5
+```
+Optional `--haze_weight` up-weights the loss for heavier-haze samples.
+
+**Resuming from a checkpoint** (model + optimizer + scheduler + epoch):
+```python
+python train.py --resume ./model_best.pth
+```
+The cosine schedule continues from the saved epoch and metrics are
+appended to `training_metrics.csv`. Older weights-only files can still
+be loaded with `--pretrained` (new conditioning params stay at their
+init via `strict=False`).
 
 ### Pre-trained models
 
@@ -73,6 +116,11 @@ Now you can proceed with the testing phase and assess the performance of our pro
 
 ```pyth
 python test.py
+```
+
+For **VLM-conditioned testing** (after captioning the test split):
+```python
+python test.py --caption
 ```
 
 ### Dataset
