@@ -24,10 +24,15 @@ from PIL import Image
 
 
 HAZE_PROMPT = (
-    "You are analyzing a remote sensing image taken from above. "
-    "Rate the haziness of this image on a scale: clear, lightly hazy, "
-    "moderately hazy, heavily hazy. Reply with EXACTLY one short "
-    "sentence of the form: '<level>. <brief visibility description>'."
+    "You are an expert analyzing a remote sensing satellite or aerial image. "
+    "Assess the atmospheric haze, fog, or smog obscuring the ground. "
+    "Consider: how much detail is visible, how muted the colors are, "
+    "how far through the haze you can distinguish features like roads, "
+    "buildings, or vegetation. "
+    "Reply with EXACTLY ONE sentence in this format: "
+    "'<level>. <describe color, contrast, feature visibility, and thickness>'. "
+    "Use one of these levels: clear, lightly hazy, moderately hazy, heavily hazy. "
+    "Be specific and descriptive about what you observe."
 )
 
 LEVEL_KEYWORDS = [
@@ -187,8 +192,13 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
         return _caption_local_vlm(p, processor, model, device, vlm_model_id, max_side)
 
     def cleanup():
+        import torch
+        nonlocal model, processor
+        model.cpu()
         del model
         del processor
+        import gc
+        gc.collect()
         torch.cuda.empty_cache()
 
     return caption_fn, cleanup
