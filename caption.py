@@ -24,15 +24,26 @@ from PIL import Image
 
 
 HAZE_PROMPT = (
-    "You are an expert analyzing a remote sensing satellite or aerial image. "
-    "Assess the atmospheric haze, fog, or smog obscuring the ground. "
-    "Consider: how much detail is visible, how muted the colors are, "
-    "how far through the haze you can distinguish features like roads, "
-    "buildings, or vegetation. "
+    "You are a remote sensing imagery analyst specializing in atmospheric "
+    "conditions in satellite and aerial photographs. "
+    "Classify the haze/fog density in this image using these exact criteria:\n\n"
+    "- HEAVILY HAZY (level 3): Colors are strongly washed out or whitened. "
+    "Ground features (roads, buildings, fields) are barely distinguishable or "
+    "blurred. The overall scene looks milky, foggy, or covered by a thick "
+    "white/gray layer. Contrast is very low.\n"
+    "- MODERATELY HAZY (level 2): Features are visible but noticeably degraded. "
+    "Colors are muted. There is an obvious atmospheric veil reducing contrast "
+    "and sharpness. Fine details like building edges or road markings are hard "
+    "to see.\n"
+    "- LIGHTLY HAZY (level 1): Most features are clearly visible with only a "
+    "slight atmospheric effect. Colors are slightly desaturated. Contrast is "
+    "mildly reduced but details are still sharp.\n"
+    "- CLEAR (level 0): Sharp, high-contrast image with vivid colors and no "
+    "atmospheric degradation.\n\n"
     "Reply with EXACTLY ONE sentence in this format: "
-    "'<level>. <describe color, contrast, feature visibility, and thickness>'. "
-    "Use one of these levels: clear, lightly hazy, moderately hazy, heavily hazy. "
-    "Be specific and descriptive about what you observe."
+    "'<level>. <brief description of what you observe>'.\n"
+    "For example: 'Heavily hazy. The entire scene is covered by a thick white "
+    "fog layer with barely visible ground features and extremely low contrast.'"
 )
 
 LEVEL_KEYWORDS = [
@@ -219,6 +230,9 @@ def main():
     parser.add_argument("--api_key", type=str, default="")
     parser.add_argument("--max_side", type=int, default=512,
                         help="Resize longest image side to this before VLM (VRAM control).")
+    parser.add_argument("--output_dir", type=str, default="",
+                        help="Directory to write captions.json to (default: same as --input_dir). "
+                             "Use when the input directory is read-only (e.g. /kaggle/input/).")
     parser.add_argument("--overwrite", action="store_true",
                         help="Re-caption images already present in captions.json.")
     args = parser.parse_args()
@@ -226,7 +240,10 @@ def main():
     if not os.path.isdir(args.input_dir):
         raise SystemExit(f"Input directory not found: {args.input_dir}")
 
-    cache_path = os.path.join(args.input_dir, "captions.json")
+    output_dir = args.output_dir or args.input_dir
+    if args.output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    cache_path = os.path.join(output_dir, "captions.json")
     cache = {} if args.overwrite else load_existing(cache_path)
     if not args.overwrite:
         print(f"Loaded {len(cache)} existing captions from {cache_path}")
