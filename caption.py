@@ -196,8 +196,11 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
 
     processor = AutoProcessor.from_pretrained(vlm_model_id, trust_remote_code=True)
     model = ModelClass.from_pretrained(
-        vlm_model_id, torch_dtype=torch.float16, trust_remote_code=True, device_map=device
-    ).eval()
+        vlm_model_id, 
+        torch_dtype=torch.float16, 
+        trust_remote_code=True,
+        low_cpu_mem_usage=False
+    ).to(device).eval()
 
     def caption_fn(p):
         return _caption_local_vlm(p, processor, model, device, vlm_model_id, max_side)
