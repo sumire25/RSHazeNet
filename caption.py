@@ -196,8 +196,8 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
 
     processor = AutoProcessor.from_pretrained(vlm_model_id, trust_remote_code=True)
     model = ModelClass.from_pretrained(
-        vlm_model_id, torch_dtype=torch.float16, trust_remote_code=True
-    ).to(device).eval()
+        vlm_model_id, torch_dtype=torch.float16, trust_remote_code=True, device_map=device
+    ).eval()
 
     def caption_fn(p):
         return _caption_local_vlm(p, processor, model, device, vlm_model_id, max_side)
@@ -217,7 +217,25 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
 
 def _cuda_available():
     import torch
-    return torch.cuda.is_available()
+    if torch.cuda.is_available():
+        cap = torch.cuda.get_device_capability()
+        if cap[0] < 7:
+            name = torch.cuda.get_device_name()
+            import sys
+            print(f"\n{'!'*60}")
+            print(f"CRITICAL ERROR: GPU NOT SUPPORTED BY CURRENT PYTORCH!")
+            print(f"{'!'*60}")
+            print(f"Detected GPU: {name} (Compute Capability {cap[0]}.{cap[1]})")
+            print(f"This GPU is no longer supported by Kaggle's default PyTorch.")
+            print(f"This will cause the model loading to freeze or crash.")
+            print(f"\nHOW TO FIX THIS IN KAGGLE:")
+            print(f"1. Click the 'Settings' pane or the three dots in the top right.")
+            print(f"2. Change 'Accelerator' from 'GPU P100' to 'GPU T4x2'.")
+            print(f"3. Restart the session and run the notebook again.")
+            print(f"{'!'*60}\n")
+            sys.exit(1)
+        return True
+    return False
 
 
 def main():
