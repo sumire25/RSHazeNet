@@ -199,7 +199,8 @@ def build_captioner(vlm_model_id, api_key, api, device, max_side):
         vlm_model_id, 
         torch_dtype=torch.float16, 
         trust_remote_code=True,
-        low_cpu_mem_usage=False
+        low_cpu_mem_usage=False,
+        attn_implementation="sdpa"
     ).to(device).eval()
 
     def caption_fn(p):
