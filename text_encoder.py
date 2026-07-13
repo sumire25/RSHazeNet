@@ -70,7 +70,8 @@ class CaptionTextEncoder(nn.Module):
         with torch.autocast(device_type=device, enabled=False):
             last_hidden = self.transformer(input_ids=input_ids,
                                            attention_mask=attention_mask).last_hidden_state  # (B, N, 768)
-            x = last_hidden @ self.text_projection                                            # (B, N, 512)
+            # New Line 73
+            x = self.text_projection(last_hidden) if isinstance(self.text_projection, torch.nn.Module) else last_hidden @ self.text_projection
         return x
 
     @torch.no_grad()
