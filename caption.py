@@ -24,26 +24,10 @@ from PIL import Image
 
 
 HAZE_PROMPT = (
-    "You are a remote sensing imagery analyst specializing in atmospheric "
-    "conditions in satellite and aerial photographs. "
-    "Classify the haze/fog density in this image using these exact criteria:\n\n"
-    "- HEAVILY HAZY (level 3): Colors are strongly washed out or whitened. "
-    "Ground features (roads, buildings, fields) are barely distinguishable or "
-    "blurred. The overall scene looks milky, foggy, or covered by a thick "
-    "white/gray layer. Contrast is very low.\n"
-    "- MODERATELY HAZY (level 2): Features are visible but noticeably degraded. "
-    "Colors are muted. There is an obvious atmospheric veil reducing contrast "
-    "and sharpness. Fine details like building edges or road markings are hard "
-    "to see.\n"
-    "- LIGHTLY HAZY (level 1): Most features are clearly visible with only a "
-    "slight atmospheric effect. Colors are slightly desaturated. Contrast is "
-    "mildly reduced but details are still sharp.\n"
-    "- CLEAR (level 0): Sharp, high-contrast image with vivid colors and no "
-    "atmospheric degradation.\n\n"
-    "Reply with EXACTLY ONE sentence in this format: "
-    "'<level>. <brief description of what you observe>'.\n"
-    "For example: 'Heavily hazy. The entire scene is covered by a thick white "
-    "fog layer with barely visible ground features and extremely low contrast.'"
+    "Analyze this aerial image objectively. "
+    "1. State the dominant color of the terrain to prove you can see it. "
+    "2. Describe the contrast and whether any white/gray atmospheric fog is present. "
+    "3. Conclude with EXACTLY one label: [Heavily hazy], [Moderately hazy], [Lightly hazy], or [Clear]."
 )
 
 LEVEL_KEYWORDS = [
