@@ -51,7 +51,7 @@ if __name__ == '__main__':
     if use_cuda:
         myNet = myNet.cuda()
 
-    ckpt = torch.load(args.weights, map_location='cpu' if not use_cuda else None)
+    ckpt = torch.load(args.weights, map_location='cpu' if not use_cuda else None, weights_only=False)
     state = ckpt['model'] if isinstance(ckpt, dict) and 'model' in ckpt else ckpt
     myNet.load_state_dict(state, strict=False)
     myNet.eval()

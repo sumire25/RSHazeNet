@@ -72,7 +72,7 @@ def load_full_checkpoint(net, optimizer, scheduler, path, use_cuda, device):
     Returns (start_epoch, best_psnr, best_epoch).
     """
     map_location = torch.device('cpu') if not use_cuda else None
-    ckpt = torch.load(path, map_location=map_location)
+    ckpt = torch.load(path, map_location=map_location, weights_only=False)
     if isinstance(ckpt, dict) and 'model' in ckpt:
         net.load_state_dict(ckpt['model'], strict=False)
         if optimizer is not None and 'optimizer' in ckpt:
@@ -253,10 +253,10 @@ if __name__ == '__main__':
                         ergas_val = calculate_ergas(output_value, target_value)
                         ergas_list.append(ergas_val)
 
-            avg_psnr = np.mean(psnr_list)
-            avg_ssim = np.mean(ssim_list)
-            avg_sam = np.mean(sam_list)
-            avg_ergas = np.mean(ergas_list)
+            avg_psnr = float(np.mean(psnr_list))
+            avg_ssim = float(np.mean(ssim_list))
+            avg_sam = float(np.mean(sam_list))
+            avg_ergas = float(np.mean(ergas_list))
 
             print(f"\n[Val Epoch {epoch+1}] PSNR: {avg_psnr:.4f} | SSIM: {avg_ssim:.4f} | SAM: {avg_sam:.4f} | ERGAS: {avg_ergas:.4f}")
 

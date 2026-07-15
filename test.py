@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     print('--------------------------------------------------------------')
     ckpt = torch.load(opt.MODEL_PRE_PATH,
-                      map_location='cpu' if not opt.CUDA_USE else None)
+                      map_location='cpu' if not opt.CUDA_USE else None, weights_only=False)
     state = ckpt['model'] if isinstance(ckpt, dict) and 'model' in ckpt else ckpt
     myNet.load_state_dict(state, strict=False)
     myNet.eval()
